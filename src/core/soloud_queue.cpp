@@ -64,6 +64,8 @@ namespace SoLoud
 
 	QueueInstance::~QueueInstance()
 	{
+		if(mParent)
+			mParent->clearInstanceInternal();
 	}
 
 	Queue::Queue()
@@ -75,7 +77,7 @@ namespace SoLoud
 		mCount = 0;
 		int i;
 		for (i = 0; i < SOLOUD_QUEUE_MAX; i++)
-			mSource[i] = 0;
+			mSource[i] = nullptr;
 	}
 	
 	QueueInstance * Queue::createInstance()
@@ -83,6 +85,7 @@ namespace SoLoud
 		if (mInstance)
 		{
 			stop();
+			delete mInstance;
 			mInstance = 0;
 		}
 		mInstance = new QueueInstance(this);
@@ -109,10 +112,10 @@ namespace SoLoud
 			return INVALID_PARAMETER;
 		}
 	
-		findQueueHandle();
-
-		if (mQueueHandle == 0)
-			return INVALID_PARAMETER;
+		// it is not clear, why we would need this
+		//findQueueHandle();
+		//if (mQueueHandle == 0)
+		//	return INVALID_PARAMETER;
 
 		if (mCount >= SOLOUD_QUEUE_MAX)
 			return OUT_OF_MEMORY;
@@ -141,13 +144,44 @@ namespace SoLoud
 		return SO_NO_ERROR;
 	}
 
+	void Queue::stop_queue()
+	{
+		// empty queue. this is not very efficient, since the mutex is locked in each iteration. oh well...
+		while(getQueueCount() > 0)
+			pop();
 
-	unsigned int Queue::getQueueCount()
+		stop();
+		mInstance = 0; // instance was deleted from stop()
+	}
+
+	result Queue::pop()
 	{
 		if (!mSoloud)
 		{
-			return 0;
+			return UNKNOWN_ERROR;
 		}
+
+		mSoloud->lockAudioMutex_internal();
+		if(mCount == 0)
+		{
+			mSoloud->unlockAudioMutex_internal();
+			return SO_NO_ERROR; // queue empty, no future sound available to remove
+		}
+		if( 0 == mWriteIndex ) // cant use modulo operation due to temporary negative numbers
+			mWriteIndex = SOLOUD_QUEUE_MAX -1;
+		else
+			mWriteIndex -= 1;
+		delete mSource[mWriteIndex];
+		mSource[mWriteIndex] = nullptr;
+		mCount--;
+		mSoloud->unlockAudioMutex_internal();
+
+		return SO_NO_ERROR;
+	}
+
+
+	unsigned int Queue::getQueueCount()
+	{
 		unsigned int count;
 		mSoloud->lockAudioMutex_internal();
 		count = mCount;
@@ -180,5 +214,37 @@ namespace SoLoud
 		mChannels = aChannels;
 		mBaseSamplerate = aSamplerate;
 	    return SO_NO_ERROR;
+	}
+
+
+	bool Queue::hasEnded()
+	{
+		if(mInstance)
+			return mInstance->hasEnded();
+		else
+			return true;
+	}
+
+	void Queue::clearInstanceInternal()
+	{
+		if(mSoloud->mInsideAudioThreadMutex)
+		{
+			// we cannot use stop_queue() here to clean things up, this at this point the mutex is already locked and stop_queue will attempt to lock it again
+			while(mCount > 0)
+			{
+				if( 0 == mWriteIndex ) // cant use modulo operation due to temporary negative numbers
+					mWriteIndex = SOLOUD_QUEUE_MAX -1;
+				else
+					mWriteIndex -= 1;
+				delete mSource[mWriteIndex];
+				mSource[mWriteIndex] = nullptr;
+				mCount--;
+			}
+			mInstance = 0;
+		}
+		else
+		{
+			stop_queue();
+		}
 	}
 };
