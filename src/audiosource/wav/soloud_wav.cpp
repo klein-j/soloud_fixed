@@ -43,7 +43,7 @@ namespace SoLoud
 
 	unsigned int WavInstance::getAudio(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize)
 	{		
-		if (mParent->mData == NULL)
+		if (mParent->mData.empty())
 			return 0;
 
 		unsigned int dataleft = mParent->mSampleCount - mOffset;
@@ -54,7 +54,7 @@ namespace SoLoud
 		unsigned int i;
 		for (i = 0; i < mChannels; i++)
 		{
-			memcpy(aBuffer + i * aBufferSize, mParent->mData + mOffset + i * mParent->mSampleCount, sizeof(float) * copylen);
+			memcpy(aBuffer + i * aBufferSize, mParent->mData.data() + mOffset + i * mParent->mSampleCount, sizeof(float) * copylen);
 		}
 
 		mOffset += copylen;
@@ -79,14 +79,12 @@ namespace SoLoud
 
 	Wav::Wav()
 	{
-		mData = NULL;
 		mSampleCount = 0;
 	}
 	
 	Wav::~Wav()
 	{
 		stop();
-		delete[] mData;
 	}
 
 #define MAKEDWORD(a,b,c,d) (((d) << 24) | ((c) << 16) | ((b) << 8) | (a))
@@ -108,7 +106,7 @@ namespace SoLoud
 			return FILE_LOAD_FAILED;
 		}
 
-		mData = new float[(unsigned int)(samples * decoder.channels)];
+		mData.resize((unsigned int)(samples * decoder.channels));
 		mBaseSamplerate = (float)decoder.sampleRate;
 		mSampleCount = (unsigned int)samples;
 		mChannels = decoder.channels;
@@ -147,6 +145,11 @@ namespace SoLoud
 		mBaseSamplerate = (float)info.sample_rate;
         int samples = stb_vorbis_stream_length_in_samples(vorbis);
 
+		if( 0 == samples)
+		{
+			return FILE_LOAD_FAILED;
+		}
+
 		if (info.channels > MAX_CHANNELS)
 		{
 			mChannels = MAX_CHANNELS;
@@ -155,8 +158,7 @@ namespace SoLoud
 		{
 			mChannels = info.channels;
 		}
-		mData = new float[samples * mChannels];
-		memset(mData, 0, samples * mChannels * sizeof(float));
+		mData.resize(samples * mChannels);
 		mSampleCount = samples;
 		samples = 0;
 		while(1)
@@ -170,7 +172,7 @@ namespace SoLoud
 
 			unsigned int ch;
 			for (ch = 0; ch < mChannels; ch++)
-				memcpy(mData + samples + mSampleCount * ch, outputs[ch], sizeof(float) * n);
+				memcpy(mData.data() + samples + mSampleCount * ch, outputs[ch], sizeof(float) * n);
 
 			samples += n;
 		}
@@ -196,7 +198,7 @@ namespace SoLoud
 			return FILE_LOAD_FAILED;
 		}
 
-		mData = new float[(unsigned int)(samples * decoder.channels)];
+		mData.resize((unsigned int)(samples * decoder.channels));
 		mBaseSamplerate = (float)decoder.sampleRate;
 		mSampleCount = (unsigned int)samples;
 		mChannels = decoder.channels;
@@ -238,7 +240,7 @@ namespace SoLoud
 			return FILE_LOAD_FAILED;
 		}
 
-		mData = new float[(unsigned int)(samples * decoder->channels)];
+		mData.resize((unsigned int)(samples * decoder->channels));
 		mBaseSamplerate = (float)decoder->sampleRate;
 		mSampleCount = (unsigned int)samples;
 		mChannels = decoder->channels;
@@ -265,8 +267,7 @@ namespace SoLoud
 
     result Wav::testAndLoadFile(MemoryFile *aReader)
     {
-		delete[] mData;
-		mData = 0;
+		mData.clear();
 		mSampleCount = 0;
 		mChannels = 1;
         int tag = aReader->read32();
@@ -347,8 +348,7 @@ namespace SoLoud
 		if (aMem == 0 || aLength == 0 || aSamplerate <= 0 || aChannels < 1)
 			return INVALID_PARAMETER;
 		stop();
-		delete[] mData;
-		mData = new float[aLength];	
+		mData.resize(aLength);	
 		mSampleCount = aLength / aChannels;
 		mChannels = aChannels;
 		mBaseSamplerate = aSamplerate;
@@ -363,8 +363,7 @@ namespace SoLoud
 		if (aMem == 0 || aLength == 0 || aSamplerate <= 0 || aChannels < 1)
 			return INVALID_PARAMETER;
 		stop();
-		delete[] mData;
-		mData = new float[aLength];
+		mData.resize(aLength);
 		mSampleCount = aLength / aChannels;
 		mChannels = aChannels;
 		mBaseSamplerate = aSamplerate;
@@ -374,21 +373,16 @@ namespace SoLoud
 		return SO_NO_ERROR;
 	}
 
-	result Wav::loadRawWave(float *aMem, unsigned int aLength, float aSamplerate, unsigned int aChannels, bool aCopy, bool aTakeOwndership)
+	// todo: remove meaningless aCopy and aTakeOwndership parameters
+	result Wav::loadRawWave(float *aMem, unsigned int aLength, float aSamplerate, unsigned int aChannels)
 	{
 		if (aMem == 0 || aLength == 0 || aSamplerate <= 0 || aChannels < 1)
 			return INVALID_PARAMETER;
 		stop();
-		delete[] mData;
-		if (aCopy == true || aTakeOwndership == false)
-		{
-			mData = new float[aLength];
-			memcpy(mData, aMem, sizeof(float) * aLength);
-		}
-		else
-		{
-			mData = aMem;
-		}
+
+		mData.resize(aLength);
+		memcpy(mData.data(), aMem, sizeof(float) * aLength);
+
 		mSampleCount = aLength / aChannels;
 		mChannels = aChannels;
 		mBaseSamplerate = aSamplerate;

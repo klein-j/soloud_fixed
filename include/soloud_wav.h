@@ -26,6 +26,7 @@ freely, subject to the following restrictions:
 #define SOLOUD_WAV_H
 
 #include "soloud.h"
+#include <vector>
 
 struct stb_vorbis;
 
@@ -54,7 +55,7 @@ namespace SoLoud
 		result loadflac(MemoryFile *aReader);
 		result testAndLoadFile(MemoryFile *aReader);
 	public:
-		float *mData;
+		std::vector<float> mData;
 		unsigned int mSampleCount;
 
 		Wav();
@@ -64,7 +65,7 @@ namespace SoLoud
 		result loadFile(File *aFile);
 		result loadRawWave8(unsigned char *aMem, unsigned int aLength, float aSamplerate = 44100.0f, unsigned int aChannels = 1);
 		result loadRawWave16(short *aMem, unsigned int aLength, float aSamplerate = 44100.0f, unsigned int aChannels = 1);
-		result loadRawWave(float *aMem, unsigned int aLength, float aSamplerate = 44100.0f, unsigned int aChannels = 1, bool aCopy = false, bool aTakeOwnership = true);
+		result loadRawWave(float *aMem, unsigned int aLength, float aSamplerate = 44100.0f, unsigned int aChannels = 1);
 
 		virtual AudioSourceInstance *createInstance();
 		time getLength();
